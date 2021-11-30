@@ -1,5 +1,5 @@
 # WSYS
-<img src="imgs/logo.png" width="100">
+<img src="img/logo.png" width="100">
 
 WSYS or Wrapped SYS is an [ERC-20](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md) compatible wrapper contract around the Syscoin token.
 
