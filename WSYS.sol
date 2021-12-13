@@ -15,9 +15,59 @@
 
 // Contract name, token name, and token symbol modified by Pollum Labs 2021
 
-pragma solidity >=0.4.22 <0.6.0;
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Code adapted from https://github.com/OpenZeppelin/openzeppelin-contracts/pull/2237/
+pragma solidity ^0.8.0;
 
-contract WSYS {
+/**
+ * @dev Interface of the ERC2612 standard as defined in the EIP.
+ *
+ * Adds the {permit} method, which can be used to change one's
+ * {IERC20-allowance} without having to send a transaction, by signing a
+ * message. This allows users to spend tokens without having to hold Ether.
+ *
+ * See https://eips.ethereum.org/EIPS/eip-2612.
+ */
+interface IERC2612 {
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over `owner`'s tokens,
+     * given `owner`'s signed approval.
+     *
+     * IMPORTANT: The same issues {IERC20-approve} has related to transaction
+     * ordering also apply here.
+     *
+     * Emits an {Approval} event.
+     *
+     * Requirements:
+     *
+     * - `owner` cannot be the zero address.
+     * - `spender` cannot be the zero address.
+     * - `deadline` must be a timestamp in the future.
+     * - `v`, `r` and `s` must be a valid `secp256k1` signature from `owner`
+     * over the EIP712-formatted function arguments.
+     * - the signature must use ``owner``'s current nonce (see {nonces}).
+     *
+     * For more information on the signature format, see the
+     * https://eips.ethereum.org/EIPS/eip-2612#specification[relevant EIP
+     * section].
+     */
+    function permit(address owner, address spender, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+
+    /**
+     * @dev Returns the current ERC2612 nonce for `owner`. This value must be
+     * included whenever a signature is generated for {permit}.
+     *
+     * Every successful call to {permit} increases ``owner``'s nonce by one. This
+     * prevents a signature from being used multiple times.
+     */
+    function nonces(address owner) external view returns (uint256);
+}
+
+
+pragma solidity ^0.8.0;
+
+
+contract WSYS is IERC2612{
     string public name = "Wrapped SYS";
     string public symbol = "WSYS";
     uint8 public decimals = 18;
@@ -29,8 +79,70 @@ contract WSYS {
 
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
+    mapping (address => uint256) public override nonces;
 
-    function() external payable {
+    bytes32 public immutable PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+    bytes32 public immutable DOMAIN_SEPARATOR;
+
+    constructor() {
+        uint256 chainId;
+        assembly {
+            chainId := chainid()
+        }
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version())),
+                chainId,
+                address(this)
+            )
+        );
+    }
+
+    /// @dev Setting the version as a function so that it can be overriden
+    function version() public pure virtual returns(string memory) { return "1"; }
+
+    /**
+     * @dev See {IERC2612-permit}.
+     *
+     * In cases where the free option is not a concern, deadline can simply be
+     * set to uint(-1), so it should be seen as an optional parameter
+     */
+    function permit(address owner, address spender, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public virtual override {
+        require(deadline >= block.timestamp, "ERC20Permit: expired deadline");
+
+        bytes32 hashStruct = keccak256(
+            abi.encode(
+                PERMIT_TYPEHASH,
+                owner,
+                spender,
+                amount,
+                nonces[owner]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                '\x19\x01',
+                DOMAIN_SEPARATOR,
+                hashStruct
+            )
+        );
+
+        address signer = ecrecover(hash, v, r, s);
+        require(
+            signer != address(0) && signer == owner,
+            "ERC20Permit: invalid signature"
+        );
+
+        approve(spender, amount);
+    }
+
+
+   receive() external payable {
         deposit();
     }
 
@@ -42,7 +154,7 @@ contract WSYS {
     function withdraw(uint256 wad) public {
         require(balanceOf[msg.sender] >= wad);
         balanceOf[msg.sender] -= wad;
-        msg.sender.transfer(wad);
+        payable(msg.sender).transfer(wad);
         emit Withdrawal(msg.sender, wad);
     }
 
@@ -66,12 +178,8 @@ contract WSYS {
         uint256 wad
     ) public returns (bool) {
         require(balanceOf[src] >= wad);
-
-        if (src != msg.sender && allowance[src][msg.sender] != uint256(-1)) {
-            require(allowance[src][msg.sender] >= wad);
-            allowance[src][msg.sender] -= wad;
-        }
-
+        require(allowance[src][msg.sender] >= wad);
+        allowance[src][msg.sender] -= wad;
         balanceOf[src] -= wad;
         balanceOf[dst] += wad;
 
