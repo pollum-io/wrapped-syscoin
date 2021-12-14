@@ -29,6 +29,63 @@ contract WSYS {
 
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
+    mapping (address => uint256) public nonces;
+
+    bytes32 public PERMIT_TYPEHASH = keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+    bytes32 public DOMAIN_SEPARATOR;
+
+    constructor() public {
+        uint256 chainId;
+        assembly {
+            chainId := chainid()
+        }
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                chainId,
+                address(this)
+            )
+        );
+    }
+
+    function permit(address owner,
+                    address spender,
+                    uint256 amount, 
+                    uint256 deadline, 
+                    uint8 v, 
+                    bytes32 r, 
+                    bytes32 s) external {
+        require(deadline >= block.timestamp, "ERC20Permit: expired deadline");
+
+        bytes32 hashStruct = keccak256(
+            abi.encode(
+                PERMIT_TYPEHASH,
+                owner,
+                spender,
+                amount,
+                nonces[owner]++,
+                deadline
+            )
+        );
+
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                '\x19\x01',
+                DOMAIN_SEPARATOR,
+                hashStruct
+            )
+        );
+
+        address signer = ecrecover(hash, v, r, s);
+        require(
+            signer != address(0) && signer == owner,
+            "ERC20Permit: invalid signature"
+        );
+
+        approve(spender, amount);
+    }
 
     function() external payable {
         deposit();
@@ -60,7 +117,7 @@ contract WSYS {
         return transferFrom(msg.sender, dst, wad);
     }
 
-    function transferFrom(
+        function transferFrom(
         address src,
         address dst,
         uint256 wad
