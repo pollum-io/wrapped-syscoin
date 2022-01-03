@@ -14,6 +14,6 @@ The WSYS implementation only changes the underlying contract to reflect the new 
 Because this contract is a fork of canonical WETH, it has the same security characteristics of the Gnosis WETH implementation. That contract has been in circulation for several years and has been thoroughly audited.
 
 ## Deployment
-- NEVM: [soon]()
+- NEVM: [0xd3e822f3ef011Ca5f17D82C956D952D8d7C3A1BB](https://explorer.syscoin.org/token/0xd3e822f3ef011Ca5f17D82C956D952D8d7C3A1BB)
 - Tanenbaum Testnet: [0xa66b2E50c2b805F31712beA422D0D9e7D0Fd0F35](https://tanenbaum.io/address/0xa66b2E50c2b805F31712beA422D0D9e7D0Fd0F35)
 
